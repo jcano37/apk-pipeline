@@ -25,9 +25,8 @@ jobs:
       
     - name: Workflow Info
       run: |
-        echo "🚀 Running: Advanced Signed APK Build Workflow - TEST JOB"
-        echo "📅 Timestamp: $(date)"
-        echo "🔧 Commit: ${{ github.sha }}"
+        echo "🧪 Running Tests for Signed APK Build"
+        echo "📅 $(date)"
       
     - name: Set up JDK 17
       uses: actions/setup-java@v4
@@ -67,6 +66,11 @@ jobs:
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
+      
+    - name: Build Info
+      run: |
+        echo "🏗️ Building Signed APK"
+        echo "📅 $(date)"
       
     - name: Set up JDK 17
       uses: actions/setup-java@v4
@@ -155,31 +159,56 @@ jobs:
     - name: Get APK info
       id: apk_info
       run: |
-        DEBUG_APK=$(find app/build/outputs/apk/debug -name "*.apk" | head -1)
-        RELEASE_APK=$(find app/build/outputs/apk/release -name "*.apk" | head -1)
-        echo "debug_apk=$DEBUG_APK" >> $GITHUB_OUTPUT
-        echo "release_apk=$RELEASE_APK" >> $GITHUB_OUTPUT
+        echo "🔍 Locating APK files..."
+        
+        # Find APKs
+        DEBUG_APK=$(find app/build/outputs/apk/debug -name "*.apk" -type f | head -1)
+        RELEASE_APK=$(find app/build/outputs/apk/release -name "*.apk" -type f | head -1)
+        
+        # Verify APKs exist
+        if [ -f "$DEBUG_APK" ]; then
+          echo "✅ Debug APK found: $DEBUG_APK"
+          echo "debug_apk=$DEBUG_APK" >> $GITHUB_OUTPUT
+        else
+          echo "❌ Debug APK not found"
+          echo "debug_apk=" >> $GITHUB_OUTPUT
+        fi
+        
+        if [ -f "$RELEASE_APK" ]; then
+          echo "✅ Release APK found: $RELEASE_APK"
+          echo "release_apk=$RELEASE_APK" >> $GITHUB_OUTPUT
+        else
+          echo "❌ Release APK not found"
+          echo "release_apk=" >> $GITHUB_OUTPUT
+        fi
         
         # Get version info
-        VERSION_NAME=$(grep versionName app/build.gradle.kts | sed 's/.*"\(.*\)".*/\1/')
-        VERSION_CODE=$(grep versionCode app/build.gradle.kts | sed 's/.*= \(.*\)/\1/')
+        VERSION_NAME=$(grep 'versionName' app/build.gradle.kts | sed 's/.*"\(.*\)".*/\1/' | head -1)
+        VERSION_CODE=$(grep 'versionCode' app/build.gradle.kts | sed 's/.*= \(.*\)/\1/' | head -1)
+        
+        echo "📋 Version Info:"
+        echo "   Name: $VERSION_NAME"
+        echo "   Code: $VERSION_CODE"
+        
         echo "version_name=$VERSION_NAME" >> $GITHUB_OUTPUT
         echo "version_code=$VERSION_CODE" >> $GITHUB_OUTPUT
         
     - name: Upload Debug APK
+      if: steps.apk_info.outputs.debug_apk != ''
       uses: actions/upload-artifact@v4
       with:
         name: app-debug-v${{ steps.apk_info.outputs.version_name }}
         path: ${{ steps.apk_info.outputs.debug_apk }}
         
     - name: Upload Release APK
+      if: steps.apk_info.outputs.release_apk != ''
       uses: actions/upload-artifact@v4
       with:
         name: app-release-v${{ steps.apk_info.outputs.version_name }}
         path: ${{ steps.apk_info.outputs.release_apk }}
         
     - name: Create Release
-      if: startsWith(github.ref, 'refs/tags/') || (github.event_name == 'workflow_dispatch' && github.event.inputs.create_release == 'true')
+      if: (startsWith(github.ref, 'refs/tags/') || (github.event_name == 'workflow_dispatch' && github.event.inputs.create_release == 'true')) && (steps.apk_info.outputs.debug_apk != '' || steps.apk_info.outputs.release_apk != '')
       uses: softprops/action-gh-release@v1
       with:
         tag_name: ${{ github.ref_name != '' && github.ref_name || format('v{0}', steps.apk_info.outputs.version_name) }}
@@ -191,11 +220,12 @@ jobs:
           - **Version Name:** ${{ steps.apk_info.outputs.version_name }}
           - **Version Code:** ${{ steps.apk_info.outputs.version_code }}
           - **Commit:** ${{ github.sha }}
-          - **Build Date:** ${{ github.event.head_commit.timestamp }}
+          - **Build Date:** ${{ github.run_started_at }}
+          - **Keystore:** ${{ env.KEYSTORE_AVAILABLE == 'true' && '🔐 Signed' || '📦 Unsigned' }}
           
           ### 📦 Downloads
-          - **app-debug.apk**: Debug version for testing
-          - **app-release.apk**: Production ready version
+          ${{ steps.apk_info.outputs.debug_apk != '' && '- **app-debug.apk**: Debug version for testing' || '' }}
+          ${{ steps.apk_info.outputs.release_apk != '' && '- **app-release.apk**: Production ready version' || '' }}
           
           ### 🔧 Installation
           1. Download the APK file

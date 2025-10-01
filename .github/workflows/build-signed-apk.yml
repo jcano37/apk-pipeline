@@ -81,9 +81,15 @@ jobs:
       run: chmod +x gradlew
       
     - name: Create keystore from secrets
-      if: ${{ secrets.KEYSTORE_BASE64 != '' }}
+      env:
+        KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
       run: |
-        echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > release-key.keystore
+        if [ -n "$KEYSTORE_BASE64" ]; then
+          echo "$KEYSTORE_BASE64" | base64 -d > release-key.keystore
+          echo "Keystore created successfully"
+        else
+          echo "No keystore secret found, skipping keystore creation"
+        fi
         
     - name: Build Release APK
       env:

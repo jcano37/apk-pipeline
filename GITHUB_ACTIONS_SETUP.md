@@ -20,10 +20,13 @@ Este proyecto incluye dos workflows de GitHub Actions para generar automáticame
 
 ## ⚙️ Configuración Inicial
 
-### Paso 1: Habilitar GitHub Actions
+### Paso 1: Habilitar GitHub Actions y Permisos
 1. Ve a tu repositorio en GitHub
 2. Navega a la pestaña **Actions**
 3. Habilita GitHub Actions si no está activado
+4. Ve a **Settings** → **Actions** → **General**
+5. En **Workflow permissions**, selecciona **Read and write permissions**
+6. Marca **Allow GitHub Actions to create and approve pull requests**
 
 ### Paso 2: Configurar Secrets (Opcional - Para APK Firmado)
 Para generar APKs firmados, configura estos secrets en GitHub:
@@ -126,6 +129,13 @@ Si el APK release no se firma correctamente:
 1. Verifica que todos los secrets estén configurados
 2. Asegúrate de que el keystore esté en base64 correcto
 3. Descomenta la línea de `signingConfig` en `build.gradle.kts`
+
+### Error 403 al Crear Release
+Si el workflow falla con error 403 al crear releases:
+1. Ve a **Settings** → **Actions** → **General**
+2. En **Workflow permissions**, selecciona **Read and write permissions**
+3. Asegúrate de que **Allow GitHub Actions to create and approve pull requests** esté marcado
+4. Los workflows ya incluyen los permisos necesarios (`contents: write`)
 
 ### Build Lento
 Para acelerar los builds:

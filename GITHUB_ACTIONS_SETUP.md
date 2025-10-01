@@ -4,19 +4,21 @@ Este proyecto incluye dos workflows de GitHub Actions para generar automáticame
 
 ## 📋 Workflows Disponibles
 
-### 1. `build-apk.yml` - Build Básico
+### 1. `build-apk.yml` - Build Básico (Sin Firma)
 - **Trigger**: Push a `main` o Pull Request
 - **Funcionalidad**: 
-  - Compila APK Debug y Release
+  - Compila APK Debug y Release **sin firmar**
   - Sube artefactos descargables
   - Crea releases automáticos
+  - **Ideal para**: Desarrollo y testing
 
 ### 2. `build-signed-apk.yml` - Build Avanzado con Firma
 - **Trigger**: Tags `v*` o ejecución manual
 - **Funcionalidad**:
   - Ejecuta tests unitarios
-  - Compila APKs firmados
+  - Compila APKs firmados (si se configuran secrets)
   - Crea releases con información detallada
+  - **Ideal para**: Releases de producción
 
 ## ⚙️ Configuración Inicial
 

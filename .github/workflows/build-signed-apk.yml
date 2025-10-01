@@ -88,20 +88,39 @@ jobs:
       env:
         KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
       run: |
+        set +e  # Disable exit on error for this section
+        
         if [ -n "$KEYSTORE_BASE64" ] && [ "$KEYSTORE_BASE64" != "" ]; then
-          echo "Keystore secret found, attempting to decode..."
+          echo "🔍 Keystore secret found, attempting to decode..."
+          
+          # Try to decode base64, capture both stdout and stderr
           if echo "$KEYSTORE_BASE64" | base64 -d > release-key.keystore 2>/dev/null; then
-            echo "✅ Keystore created successfully"
-            ls -la release-key.keystore
+            if [ -f "release-key.keystore" ] && [ -s "release-key.keystore" ]; then
+              echo "✅ Keystore created successfully"
+              ls -la release-key.keystore
+              echo "KEYSTORE_AVAILABLE=true" >> $GITHUB_ENV
+            else
+              echo "❌ Keystore file is empty or not created"
+              rm -f release-key.keystore
+              echo "KEYSTORE_AVAILABLE=false" >> $GITHUB_ENV
+            fi
           else
-            echo "❌ Failed to decode keystore from base64. Please check your KEYSTORE_BASE64 secret."
-            echo "The secret might be empty or contain invalid base64 characters."
-            echo "Continuing without keystore (unsigned APK will be generated)"
+            echo "❌ Failed to decode keystore from base64"
+            echo "🔧 Possible issues:"
+            echo "   - Secret contains invalid base64 characters"
+            echo "   - Secret has line breaks (use base64 -w 0)"
+            echo "   - Secret is empty or corrupted"
+            echo "📦 Continuing without keystore (unsigned APK will be generated)"
+            rm -f release-key.keystore
+            echo "KEYSTORE_AVAILABLE=false" >> $GITHUB_ENV
           fi
         else
-          echo "ℹ️ No keystore secret configured, skipping keystore creation"
-          echo "This will generate an unsigned APK"
+          echo "ℹ️ No keystore secret configured"
+          echo "📦 This will generate an unsigned APK"
+          echo "KEYSTORE_AVAILABLE=false" >> $GITHUB_ENV
         fi
+        
+        set -e  # Re-enable exit on error
         
     - name: Build Release APK
       env:
@@ -110,13 +129,19 @@ jobs:
         KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
         KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
       run: |
-        echo "Building Release APK..."
-        if [ -f "release-key.keystore" ]; then
-          echo "🔐 Keystore found - building signed APK"
+        echo "🏗️ Building Release APK..."
+        
+        if [ "$KEYSTORE_AVAILABLE" = "true" ] && [ -f "release-key.keystore" ]; then
+          echo "🔐 Keystore available - building signed APK"
+          echo "📋 Keystore info:"
+          ls -la release-key.keystore
         else
-          echo "📦 No keystore - building unsigned APK"
+          echo "📦 No keystore available - building unsigned APK"
+          echo "ℹ️ To get signed APKs, configure KEYSTORE_BASE64 and related secrets"
         fi
-        ./gradlew assembleRelease
+        
+        echo "🚀 Starting Gradle build..."
+        ./gradlew assembleRelease --stacktrace
       
     - name: Build Debug APK
       run: ./gradlew assembleDebug

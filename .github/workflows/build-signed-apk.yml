@@ -88,11 +88,19 @@ jobs:
       env:
         KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
       run: |
-        if [ -n "$KEYSTORE_BASE64" ]; then
-          echo "$KEYSTORE_BASE64" | base64 -d > release-key.keystore
-          echo "Keystore created successfully"
+        if [ -n "$KEYSTORE_BASE64" ] && [ "$KEYSTORE_BASE64" != "" ]; then
+          echo "Keystore secret found, attempting to decode..."
+          if echo "$KEYSTORE_BASE64" | base64 -d > release-key.keystore 2>/dev/null; then
+            echo "✅ Keystore created successfully"
+            ls -la release-key.keystore
+          else
+            echo "❌ Failed to decode keystore from base64. Please check your KEYSTORE_BASE64 secret."
+            echo "The secret might be empty or contain invalid base64 characters."
+            echo "Continuing without keystore (unsigned APK will be generated)"
+          fi
         else
-          echo "No keystore secret found, skipping keystore creation"
+          echo "ℹ️ No keystore secret configured, skipping keystore creation"
+          echo "This will generate an unsigned APK"
         fi
         
     - name: Build Release APK
@@ -101,7 +109,14 @@ jobs:
         KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
         KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
         KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
-      run: ./gradlew assembleRelease
+      run: |
+        echo "Building Release APK..."
+        if [ -f "release-key.keystore" ]; then
+          echo "🔐 Keystore found - building signed APK"
+        else
+          echo "📦 No keystore - building unsigned APK"
+        fi
+        ./gradlew assembleRelease
       
     - name: Build Debug APK
       run: ./gradlew assembleDebug

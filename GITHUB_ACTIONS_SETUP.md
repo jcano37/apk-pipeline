@@ -48,10 +48,23 @@ keytool -genkey -v -keystore release-key.keystore -alias key0 -keyalg RSA -keysi
 
 #### Convertir Keystore a Base64:
 ```bash
-base64 -i release-key.keystore | pbcopy  # macOS
-base64 -i release-key.keystore           # Linux
-certutil -encode release-key.keystore keystore.txt  # Windows
+# macOS
+base64 -i release-key.keystore | pbcopy
+
+# Linux
+base64 -w 0 release-key.keystore
+
+# Windows (PowerShell)
+[Convert]::ToBase64String([IO.File]::ReadAllBytes("release-key.keystore"))
+
+# Windows (Git Bash)
+base64 -w 0 release-key.keystore
 ```
+
+**⚠️ Importante**: 
+- Usa `-w 0` en Linux para evitar saltos de línea
+- En Windows PowerShell, copia todo el resultado sin espacios ni saltos de línea
+- El resultado debe ser una sola línea continua de caracteres base64
 
 ## 🎯 Cómo Usar
 
@@ -129,6 +142,22 @@ Si el APK release no se firma correctamente:
 1. Verifica que todos los secrets estén configurados
 2. Asegúrate de que el keystore esté en base64 correcto
 3. Descomenta la línea de `signingConfig` en `build.gradle.kts`
+
+### Error "base64: invalid input"
+Si el workflow falla con error de base64 inválido:
+1. **Verifica el secret KEYSTORE_BASE64**:
+   - Debe ser una sola línea continua sin espacios ni saltos de línea
+   - Usa `base64 -w 0` en Linux o el comando de PowerShell en Windows
+2. **Regenera el keystore en base64**:
+   ```bash
+   # Linux/macOS
+   base64 -w 0 release-key.keystore
+   
+   # Windows PowerShell
+   [Convert]::ToBase64String([IO.File]::ReadAllBytes("release-key.keystore"))
+   ```
+3. **Copia exactamente** el resultado completo al secret
+4. **Si no tienes keystore**, simplemente no configures los secrets - el workflow generará APK sin firmar
 
 ### Error 403 al Crear Release
 Si el workflow falla con error 403 al crear releases:

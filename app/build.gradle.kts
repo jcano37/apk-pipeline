@@ -40,8 +40,10 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
-            // Comentar la siguiente línea si no tienes keystore configurado
-            // signingConfig = signingConfigs.getByName("release")
+            // Use signing config if keystore is available
+            if (System.getenv("KEYSTORE_FILE") != null && File(System.getenv("KEYSTORE_FILE") ?: "").exists()) {
+                signingConfig = signingConfigs.getByName("release")
+            }
         }
     }
     compileOptions {

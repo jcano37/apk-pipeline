@@ -120,7 +120,23 @@ jobs:
         KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
         KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
         KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
-      run: ./gradlew assembleRelease
+      run: |
+        if [ "$KEYSTORE_AVAILABLE" = "true" ]; then
+          echo "🔐 Building signed release APK..."
+        else
+          echo "📦 Building unsigned release APK..."
+        fi
+        ./gradlew assembleRelease
+        
+        # Check if APK was signed
+        APK_FILE=$(find app/build/outputs/apk/release -name "*.apk" | head -1)
+        if [ -f "$APK_FILE" ]; then
+          if [[ "$APK_FILE" == *"unsigned"* ]]; then
+            echo "📦 Generated: $(basename "$APK_FILE") (unsigned)"
+          else
+            echo "🔐 Generated: $(basename "$APK_FILE") (signed)"
+          fi
+        fi
       
     - name: Build Debug APK
       run: ./gradlew assembleDebug

@@ -1,0 +1,156 @@
+name: Build Signed APK
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      create_release:
+        description: 'Create GitHub Release'
+        required: true
+        default: 'true'
+        type: boolean
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Set up JDK 17
+      uses: actions/setup-java@v4
+      with:
+        java-version: '17'
+        distribution: 'temurin'
+        
+    - name: Setup Android SDK
+      uses: android-actions/setup-android@v3
+      
+    - name: Cache Gradle packages
+      uses: actions/cache@v4
+      with:
+        path: |
+          ~/.gradle/caches
+          ~/.gradle/wrapper
+        key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
+        restore-keys: |
+          ${{ runner.os }}-gradle-
+          
+    - name: Grant execute permission for gradlew
+      run: chmod +x gradlew
+      
+    - name: Run unit tests
+      run: ./gradlew testDebugUnitTest
+      
+    - name: Upload test results
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: test-results
+        path: app/build/reports/tests/
+
+  build-signed:
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Set up JDK 17
+      uses: actions/setup-java@v4
+      with:
+        java-version: '17'
+        distribution: 'temurin'
+        
+    - name: Setup Android SDK
+      uses: android-actions/setup-android@v3
+      
+    - name: Cache Gradle packages
+      uses: actions/cache@v4
+      with:
+        path: |
+          ~/.gradle/caches
+          ~/.gradle/wrapper
+        key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
+        restore-keys: |
+          ${{ runner.os }}-gradle-
+          
+    - name: Grant execute permission for gradlew
+      run: chmod +x gradlew
+      
+    - name: Create keystore from secrets
+      if: ${{ secrets.KEYSTORE_BASE64 != '' }}
+      run: |
+        echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > release-key.keystore
+        
+    - name: Build Release APK
+      env:
+        KEYSTORE_FILE: release-key.keystore
+        KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+        KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+        KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+      run: ./gradlew assembleRelease
+      
+    - name: Build Debug APK
+      run: ./gradlew assembleDebug
+      
+    - name: Get APK info
+      id: apk_info
+      run: |
+        DEBUG_APK=$(find app/build/outputs/apk/debug -name "*.apk" | head -1)
+        RELEASE_APK=$(find app/build/outputs/apk/release -name "*.apk" | head -1)
+        echo "debug_apk=$DEBUG_APK" >> $GITHUB_OUTPUT
+        echo "release_apk=$RELEASE_APK" >> $GITHUB_OUTPUT
+        
+        # Get version info
+        VERSION_NAME=$(grep versionName app/build.gradle.kts | sed 's/.*"\(.*\)".*/\1/')
+        VERSION_CODE=$(grep versionCode app/build.gradle.kts | sed 's/.*= \(.*\)/\1/')
+        echo "version_name=$VERSION_NAME" >> $GITHUB_OUTPUT
+        echo "version_code=$VERSION_CODE" >> $GITHUB_OUTPUT
+        
+    - name: Upload Debug APK
+      uses: actions/upload-artifact@v4
+      with:
+        name: app-debug-v${{ steps.apk_info.outputs.version_name }}
+        path: ${{ steps.apk_info.outputs.debug_apk }}
+        
+    - name: Upload Release APK
+      uses: actions/upload-artifact@v4
+      with:
+        name: app-release-v${{ steps.apk_info.outputs.version_name }}
+        path: ${{ steps.apk_info.outputs.release_apk }}
+        
+    - name: Create Release
+      if: startsWith(github.ref, 'refs/tags/') || (github.event_name == 'workflow_dispatch' && github.event.inputs.create_release == 'true')
+      uses: softprops/action-gh-release@v1
+      with:
+        tag_name: ${{ github.ref_name != '' && github.ref_name || format('v{0}', steps.apk_info.outputs.version_name) }}
+        name: Release v${{ steps.apk_info.outputs.version_name }}
+        body: |
+          ## 📱 Android APK Release v${{ steps.apk_info.outputs.version_name }}
+          
+          ### 📋 Build Information
+          - **Version Name:** ${{ steps.apk_info.outputs.version_name }}
+          - **Version Code:** ${{ steps.apk_info.outputs.version_code }}
+          - **Commit:** ${{ github.sha }}
+          - **Build Date:** ${{ github.event.head_commit.timestamp }}
+          
+          ### 📦 Downloads
+          - **app-debug.apk**: Debug version for testing
+          - **app-release.apk**: Production ready version
+          
+          ### 🔧 Installation
+          1. Download the APK file
+          2. Enable "Install from unknown sources" in Android settings
+          3. Install the APK file
+          
+        files: |
+          ${{ steps.apk_info.outputs.debug_apk }}
+          ${{ steps.apk_info.outputs.release_apk }}
+        draft: false
+        prerelease: false
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+

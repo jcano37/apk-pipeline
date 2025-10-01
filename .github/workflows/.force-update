@@ -1,0 +1,4 @@
+FORCE_UPDATE_TIMESTAMP=$(date +%s)
+# This file forces GitHub Actions to use the latest workflow version
+# Created to fix keystore handling in build-signed-apk.yml
+# Version: 2.0 - Fixed robust error handling

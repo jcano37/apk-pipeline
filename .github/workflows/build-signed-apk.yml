@@ -65,8 +65,10 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v4
       
-    - name: Build APK
-      run: echo "🏗️ Building APK..."
+    - name: Build Info
+      run: |
+        echo "🔐 Building signed APKs for production release"
+        echo "ℹ️ Will create GitHub release with APKs"
       
     - name: Set up JDK 17
       uses: actions/setup-java@v4
@@ -90,23 +92,24 @@ jobs:
     - name: Grant execute permission for gradlew
       run: chmod +x gradlew
       
-    - name: Setup keystore
+    - name: Setup keystore for signing
       env:
         KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
       run: |
         set +e
         if [ -n "$KEYSTORE_BASE64" ]; then
-          echo "🔐 Setting up keystore..."
+          echo "🔐 Setting up keystore for APK signing..."
           if echo "$KEYSTORE_BASE64" | base64 -d > release-key.keystore 2>/dev/null && [ -s "release-key.keystore" ]; then
-            echo "✅ Keystore ready"
+            echo "✅ Keystore ready - APKs will be signed"
             echo "KEYSTORE_AVAILABLE=true" >> $GITHUB_ENV
           else
-            echo "❌ Keystore failed, building unsigned APK"
+            echo "❌ Keystore setup failed - APKs will be unsigned"
             rm -f release-key.keystore
             echo "KEYSTORE_AVAILABLE=false" >> $GITHUB_ENV
           fi
         else
-          echo "📦 No keystore configured, building unsigned APK"
+          echo "⚠️ No keystore configured - APKs will be unsigned"
+          echo "💡 Configure KEYSTORE_BASE64 secret for signed APKs"
           echo "KEYSTORE_AVAILABLE=false" >> $GITHUB_ENV
         fi
         set -e
@@ -139,14 +142,14 @@ jobs:
       if: steps.apk_info.outputs.debug_apk != ''
       uses: actions/upload-artifact@v4
       with:
-        name: app-debug-v${{ steps.apk_info.outputs.version_name }}
+        name: app-debug-signed-v${{ steps.apk_info.outputs.version_name }}
         path: ${{ steps.apk_info.outputs.debug_apk }}
         
     - name: Upload Release APK
       if: steps.apk_info.outputs.release_apk != ''
       uses: actions/upload-artifact@v4
       with:
-        name: app-release-v${{ steps.apk_info.outputs.version_name }}
+        name: app-release-signed-v${{ steps.apk_info.outputs.version_name }}
         path: ${{ steps.apk_info.outputs.release_apk }}
         
     - name: Create Release
@@ -156,12 +159,16 @@ jobs:
         tag_name: ${{ github.ref_name != '' && github.ref_name || format('v{0}', steps.apk_info.outputs.version_name) }}
         name: Release v${{ steps.apk_info.outputs.version_name }}
         body: |
-          ## 📱 APK Release v${{ steps.apk_info.outputs.version_name }}
+          ## 📱 Production APK Release v${{ steps.apk_info.outputs.version_name }}
           
           **Version:** ${{ steps.apk_info.outputs.version_name }} (Code: ${{ steps.apk_info.outputs.version_code }})
           **Commit:** ${{ github.sha }}
+          **Signing:** ${{ env.KEYSTORE_AVAILABLE == 'true' && '🔐 Signed APK' || '📦 Unsigned APK' }}
           
-          Download the APK and enable "Install from unknown sources" to install.
+          ### Installation
+          1. Download the APK file
+          2. Enable "Install from unknown sources" in Android settings
+          3. Install the APK
           
         files: |
           ${{ steps.apk_info.outputs.debug_apk }}

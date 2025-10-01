@@ -101,6 +101,8 @@ jobs:
           echo "🔐 Setting up keystore for APK signing..."
           if echo "$KEYSTORE_BASE64" | base64 -d > release-key.keystore 2>/dev/null && [ -s "release-key.keystore" ]; then
             echo "✅ Keystore ready - APKs will be signed"
+            echo "📍 Keystore location: $(pwd)/release-key.keystore"
+            ls -la release-key.keystore
             echo "KEYSTORE_AVAILABLE=true" >> $GITHUB_ENV
           else
             echo "❌ Keystore setup failed - APKs will be unsigned"

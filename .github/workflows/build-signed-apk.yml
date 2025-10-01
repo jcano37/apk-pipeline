@@ -23,10 +23,8 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v4
       
-    - name: Workflow Info
-      run: |
-        echo "🧪 Running Tests for Signed APK Build"
-        echo "📅 $(date)"
+    - name: Run Tests
+      run: echo "🧪 Running unit tests..."
       
     - name: Set up JDK 17
       uses: actions/setup-java@v4
@@ -67,11 +65,8 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v4
       
-    - name: Build Info
-      run: |
-        echo "🏗️ Building Signed APK - v2.0 Fixed"
-        echo "📅 $(date)"
-        echo "🔧 This version has robust keystore handling"
+    - name: Build APK
+      run: echo "🏗️ Building APK..."
       
     - name: Set up JDK 17
       uses: actions/setup-java@v4
@@ -95,50 +90,26 @@ jobs:
     - name: Grant execute permission for gradlew
       run: chmod +x gradlew
       
-    - name: Create keystore from secrets (v2.0)
+    - name: Setup keystore
       env:
         KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
       run: |
-        set +e  # Disable exit on error for this section
-        echo "🔧 Keystore Handler v2.0 - Fixed version"
-        
-        if [ -n "$KEYSTORE_BASE64" ] && [ "$KEYSTORE_BASE64" != "" ]; then
-          echo "🔍 Keystore secret found, attempting to decode..."
-          
-          # Try to decode base64, capture both stdout and stderr
-          if echo "$KEYSTORE_BASE64" | base64 -d > release-key.keystore 2>/dev/null; then
-            if [ -f "release-key.keystore" ] && [ -s "release-key.keystore" ]; then
-              echo "✅ Keystore created successfully"
-              ls -la release-key.keystore
-              echo "KEYSTORE_AVAILABLE=true" >> $GITHUB_ENV
-            else
-              echo "❌ Keystore file is empty or not created"
-              rm -f release-key.keystore
-              echo "KEYSTORE_AVAILABLE=false" >> $GITHUB_ENV
-            fi
+        set +e
+        if [ -n "$KEYSTORE_BASE64" ]; then
+          echo "🔐 Setting up keystore..."
+          if echo "$KEYSTORE_BASE64" | base64 -d > release-key.keystore 2>/dev/null && [ -s "release-key.keystore" ]; then
+            echo "✅ Keystore ready"
+            echo "KEYSTORE_AVAILABLE=true" >> $GITHUB_ENV
           else
-            echo "❌ Failed to decode keystore from base64"
-            echo "🔧 Possible issues:"
-            echo "   - Secret contains invalid base64 characters"
-            echo "   - Secret has line breaks (use base64 -w 0)"
-            echo "   - Secret is empty or corrupted"
-            echo "📦 Continuing without keystore (unsigned APK will be generated)"
+            echo "❌ Keystore failed, building unsigned APK"
             rm -f release-key.keystore
             echo "KEYSTORE_AVAILABLE=false" >> $GITHUB_ENV
           fi
         else
-          echo "ℹ️ No keystore secret configured"
-          echo "📦 This will generate an unsigned APK"
+          echo "📦 No keystore configured, building unsigned APK"
           echo "KEYSTORE_AVAILABLE=false" >> $GITHUB_ENV
         fi
-        
-        # Clean up any failed keystore attempts
-        if [ ! -s "release-key.keystore" ]; then
-          rm -f release-key.keystore
-          echo "KEYSTORE_AVAILABLE=false" >> $GITHUB_ENV
-        fi
-        
-        set -e  # Re-enable exit on error
+        set -e
         
     - name: Build Release APK
       env:
@@ -146,20 +117,7 @@ jobs:
         KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
         KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
         KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
-      run: |
-        echo "🏗️ Building Release APK..."
-        
-        if [ "$KEYSTORE_AVAILABLE" = "true" ] && [ -f "release-key.keystore" ]; then
-          echo "🔐 Keystore available - building signed APK"
-          echo "📋 Keystore info:"
-          ls -la release-key.keystore
-        else
-          echo "📦 No keystore available - building unsigned APK"
-          echo "ℹ️ To get signed APKs, configure KEYSTORE_BASE64 and related secrets"
-        fi
-        
-        echo "🚀 Starting Gradle build..."
-        ./gradlew assembleRelease --stacktrace
+      run: ./gradlew assembleRelease
       
     - name: Build Debug APK
       run: ./gradlew assembleDebug
@@ -167,37 +125,13 @@ jobs:
     - name: Get APK info
       id: apk_info
       run: |
-        echo "🔍 Locating APK files..."
-        
-        # Find APKs
-        DEBUG_APK=$(find app/build/outputs/apk/debug -name "*.apk" -type f | head -1)
-        RELEASE_APK=$(find app/build/outputs/apk/release -name "*.apk" -type f | head -1)
-        
-        # Verify APKs exist
-        if [ -f "$DEBUG_APK" ]; then
-          echo "✅ Debug APK found: $DEBUG_APK"
-          echo "debug_apk=$DEBUG_APK" >> $GITHUB_OUTPUT
-        else
-          echo "❌ Debug APK not found"
-          echo "debug_apk=" >> $GITHUB_OUTPUT
-        fi
-        
-        if [ -f "$RELEASE_APK" ]; then
-          echo "✅ Release APK found: $RELEASE_APK"
-          echo "release_apk=$RELEASE_APK" >> $GITHUB_OUTPUT
-        else
-          echo "❌ Release APK not found"
-          echo "release_apk=" >> $GITHUB_OUTPUT
-        fi
-        
-        # Get version info
+        DEBUG_APK=$(find app/build/outputs/apk/debug -name "*.apk" | head -1)
+        RELEASE_APK=$(find app/build/outputs/apk/release -name "*.apk" | head -1)
         VERSION_NAME=$(grep 'versionName' app/build.gradle.kts | sed 's/.*"\(.*\)".*/\1/' | head -1)
         VERSION_CODE=$(grep 'versionCode' app/build.gradle.kts | sed 's/.*= \(.*\)/\1/' | head -1)
         
-        echo "📋 Version Info:"
-        echo "   Name: $VERSION_NAME"
-        echo "   Code: $VERSION_CODE"
-        
+        echo "debug_apk=$DEBUG_APK" >> $GITHUB_OUTPUT
+        echo "release_apk=$RELEASE_APK" >> $GITHUB_OUTPUT
         echo "version_name=$VERSION_NAME" >> $GITHUB_OUTPUT
         echo "version_code=$VERSION_CODE" >> $GITHUB_OUTPUT
         
@@ -216,35 +150,22 @@ jobs:
         path: ${{ steps.apk_info.outputs.release_apk }}
         
     - name: Create Release
-      if: (startsWith(github.ref, 'refs/tags/') || (github.event_name == 'workflow_dispatch' && github.event.inputs.create_release == 'true')) && (steps.apk_info.outputs.debug_apk != '' || steps.apk_info.outputs.release_apk != '')
+      if: startsWith(github.ref, 'refs/tags/') || (github.event_name == 'workflow_dispatch' && github.event.inputs.create_release == 'true')
       uses: softprops/action-gh-release@v1
       with:
         tag_name: ${{ github.ref_name != '' && github.ref_name || format('v{0}', steps.apk_info.outputs.version_name) }}
         name: Release v${{ steps.apk_info.outputs.version_name }}
         body: |
-          ## 📱 Android APK Release v${{ steps.apk_info.outputs.version_name }}
+          ## 📱 APK Release v${{ steps.apk_info.outputs.version_name }}
           
-          ### 📋 Build Information
-          - **Version Name:** ${{ steps.apk_info.outputs.version_name }}
-          - **Version Code:** ${{ steps.apk_info.outputs.version_code }}
-          - **Commit:** ${{ github.sha }}
-          - **Build Date:** ${{ github.run_started_at }}
-          - **Keystore:** ${{ env.KEYSTORE_AVAILABLE == 'true' && '🔐 Signed' || '📦 Unsigned' }}
+          **Version:** ${{ steps.apk_info.outputs.version_name }} (Code: ${{ steps.apk_info.outputs.version_code }})
+          **Commit:** ${{ github.sha }}
           
-          ### 📦 Downloads
-          ${{ steps.apk_info.outputs.debug_apk != '' && '- **app-debug.apk**: Debug version for testing' || '' }}
-          ${{ steps.apk_info.outputs.release_apk != '' && '- **app-release.apk**: Production ready version' || '' }}
-          
-          ### 🔧 Installation
-          1. Download the APK file
-          2. Enable "Install from unknown sources" in Android settings
-          3. Install the APK file
+          Download the APK and enable "Install from unknown sources" to install.
           
         files: |
           ${{ steps.apk_info.outputs.debug_apk }}
           ${{ steps.apk_info.outputs.release_apk }}
-        draft: false
-        prerelease: false
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 

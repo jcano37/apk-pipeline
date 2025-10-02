@@ -19,7 +19,6 @@ android {
 
     signingConfigs {
         create("release") {
-            // Para usar en CI/CD, estas variables se pueden configurar como secrets en GitHub
             val keystoreFile = System.getenv("KEYSTORE_FILE") ?: "release-key.keystore"
             storeFile = if (keystoreFile.startsWith("/")) {
                 file(keystoreFile)
@@ -45,7 +44,6 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
-            // Use signing config if keystore is available
             val keystoreFile = System.getenv("KEYSTORE_FILE") ?: "release-key.keystore"
             val keystorePath = if (keystoreFile.startsWith("/")) {
                 File(keystoreFile)

@@ -62,4 +62,3 @@ jobs:
       with:
         name: app-release-unsigned
         path: app/build/outputs/apk/release/app-release-unsigned.apk
-
